@@ -87,6 +87,8 @@ int main(int argc, char *argv[]) {
     bool onNear = false;
     bool finish = false;
 
+
+    naoVision.visualCompass();
     while (key != 27 && !finish){
         if (NAO) {
             src = naoVision.getImageFrom(NaoVision::BOTTOM_CAMERA);

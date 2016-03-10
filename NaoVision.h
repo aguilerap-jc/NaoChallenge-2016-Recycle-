@@ -3,11 +3,14 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <alerror/alerror.h>
 #include <alvision/alimage.h>
 #include <alproxies/almotionproxy.h>
 #include <alproxies/alrobotpostureproxy.h>
 #include <alproxies/alvideodeviceproxy.h>
 #include <alvision/alvisiondefinitions.h>
+#include <alproxies/alvisualcompassproxy.h>
+#include <alproxies/almemoryproxy.h>
 
 using namespace std;
 using namespace AL;
@@ -32,6 +35,7 @@ public:
     void unsubscribe();
     void setSourceMat(Mat source);
     Mat getSourceMat();
+    void visualCompass();
 
 private:
     RNG rng;
@@ -53,6 +57,8 @@ private:
     string ip;
     string clientName;
     string parameterClientName;
+    boost::shared_ptr<ALVisualCompassProxy> compassProxy;
+    boost::shared_ptr<ALMemoryProxy> memoryProxy;
 
     // Variables that allow us to detect different colors.
     int iLowH;
@@ -64,4 +70,5 @@ private:
 
     double getAngleDegrees(const vector<Point> &pts, Mat &img);
     void drawAxis(Mat& img, Point p, Point q, Scalar colour, const float scale);
+
 };

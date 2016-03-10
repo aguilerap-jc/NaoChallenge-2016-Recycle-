@@ -1,33 +1,5 @@
 #include "NaoVision.h"
 
-/*Parametros de verde JerseyMexicoPerro
- * LowH  = 070/179
- * HighH = 103/179
- * LowS  = 046/255
- * HighS = 255/255
- * LowV  = 000/255
- * HighV = 121/255
- *
-*/
-
-/*Parametros de verde Cinta
- * LowH  = 050/179
- * HighH = 162/179
- * LowS  = 169/255
- * HighS = 255/255
- * LowV  = 141/255
- * HighV = 255/255
-*/
-
-/*Parametros de Blanco
- * LowH  = 077/179
- * HighH = 118/179
- * LowS  = 002/255
- * HighS = 079/255
- * LowV  = 137/255
- * HighV = 161/255
-*/
-
 NaoVision::NaoVision(const string ip, const int port, bool local): cameraProxy(ip, port), rng(12345) {
     iLowH = 77;      //0
     iHighH = 118;    //77
@@ -43,6 +15,8 @@ NaoVision::NaoVision(const string ip, const int port, bool local): cameraProxy(i
     this->local = local;
     this->parameterClientName = "test";
     this->clientName = cameraProxy.subscribe(parameterClientName, AL::kQVGA, AL::kBGRColorSpace, 30); // Subscribe to ALVideoDevice
+    this->compassProxy = boost::shared_ptr<ALVisualCompassProxy>(new ALVisualCompassProxy(ip));
+    this->memoryProxy = boost::shared_ptr<ALMemoryProxy>(new ALMemoryProxy(ip, port));
 }
 
 NaoVision::NaoVision(bool local): rng(12345) {
@@ -51,6 +25,7 @@ NaoVision::NaoVision(bool local): rng(12345) {
     iLowS = 43;     // Este parametro es el primero que hay que mover en busca de la deteccion del verde.
     iHighS = 229;
     iLowV = 0;
+
     iHighV = 255;
     thresh = 110;
     umbral = 60;
@@ -58,8 +33,10 @@ NaoVision::NaoVision(bool local): rng(12345) {
     this->local = local;
     this->parameterClientName = "test";
     this->clientName = cameraProxy.subscribe(parameterClientName, AL::kQVGA, AL::kBGRColorSpace, 30); // Subscribe to ALVideoDevice
-    
+    this->compassProxy = boost::shared_ptr<ALVisualCompassProxy>(new ALVisualCompassProxy(ip));
+    this->memoryProxy = boost::shared_ptr<ALMemoryProxy>(new ALMemoryProxy(ip, port));
 }
+
 // Get image from NAO.
 Mat NaoVision::getImageFrom(NaoCamera camera) {
     if (camera == TOP_CAMERA)
@@ -262,6 +239,7 @@ int NaoVision::getAreaYellowColor(Mat originalImage) {
     colorFilter(originalImage);
     return areaColorDetection;
 }
+
 int NaoVision::getAreaWhiteColor(Mat originalImage){
 /*Parametros de Cinta Rojo
 * LowH  = 000/179
@@ -302,6 +280,7 @@ int NaoVision::getAreaBrownColor(Mat originalImage){
     return areaColorDetection;
 }
 // Adds a filter with the parameters preconfigured and calculates the area obtained for a certain preselected color.
+
 void NaoVision::colorFilter(Mat originalImage) {
     Mat src_gray;
     Mat imgHSV;
@@ -434,3 +413,112 @@ void NaoVision::setSourceMat(Mat source) {
 Mat NaoVision::getSourceMat() {
     return src;
 }
+
+void NaoVision::visualCompass(){
+
+
+    // Reference will be set each time the module is subscribed.
+    compassProxy->enableReferenceRefresh(false);
+    // Image resolution is QVGA (320x240).
+    compassProxy->setResolution(1);
+
+    // Initialize image containers for display.
+    Mat referenceImage = Mat::zeros(240, 320, CV_8UC1);
+    ALValue refImage, curImage;
+    Mat currentImage   = Mat::zeros(240, 320, CV_8UC1);
+    Mat matchImage     = Mat::zeros(480, 320, CV_8UC1);
+
+    ALValue deviation;
+    ALValue matchInfo;
+    bool running=false;
+    bool pauseStatus = false;
+    Mat roi;
+    // Loop displaying the images.
+    while(true) {
+      char key = waitKey(50);
+      // Esc key to exit.
+      if (key == 27) {
+        break;
+      }
+
+      switch (key) {
+      // 'p' key to toggle pause status.
+      case 'p':
+        // Set the reference.
+        pauseStatus = !pauseStatus;
+        compassProxy->pause(pauseStatus);
+        break;
+
+      // Enter to launch the processing.
+      case 'r':
+        // Subscribe to launch the processing.
+        // Get the reference image for display.
+        compassProxy->subscribe("VisualCompassTest");
+        refImage = compassProxy->getReferenceImage();
+        referenceImage.data = (uchar*) refImage[6].GetBinary();
+        running = true;
+        break;
+
+      // 's' key to stop the processing.
+      case 's':
+        // Unsubscribe if the module is running.
+        if (running) {
+          compassProxy->unsubscribe("VisualCompassTest");
+          running = false;
+        }
+        break;
+
+      default:
+        break;
+      }
+      if (running) {
+        // Retrieve the current image for display.
+        curImage = compassProxy->getCurrentImage();
+        currentImage.data = (uchar*) curImage[6].GetBinary();
+
+        // Get the deviation information from the ALMemory event.
+        try {
+          deviation = memoryProxy->getData("VisualCompass/Deviation");
+          matchInfo = memoryProxy->getData("VisualCompass/Match");
+        }
+        catch (const ALError&) {
+          continue;
+        }
+
+        float wy = deviation[0][0], wz = deviation[0][1];
+        // Convert it to degrees.
+        wz = wz * 180.0f / 3.14f;
+        wy = wy * 180.0f / 3.14f;
+        // Display it on the image.
+        char buffer [100];
+        sprintf(buffer, "Wz: %.2f deg, Wy: %.2f deg", wz, wy);
+        putText(currentImage, buffer, Point(10,30), CV_FONT_HERSHEY_PLAIN,
+                    1.0f, Scalar(255), 2);
+
+        roi = matchImage(Rect(0,0, 320, 240));
+        referenceImage.copyTo(roi);
+        roi = matchImage(Rect(0, 240, 320, 240));
+        currentImage.copyTo(roi);
+
+        for (int i = 0; i < static_cast<int>(matchInfo[3][1].getSize()); ++i) {
+          ALValue match = matchInfo[2][matchInfo[3][1][i]];
+          ALValue refKp = matchInfo[0][match[0]];
+          Point ref = Point((float) refKp[0][0], (float) refKp[0][1]);
+          ALValue curKp = matchInfo[1][match[1]];
+          Point cur = Point((float) curKp[0][0], (float) curKp[0][1]);
+          cur.y += 240;
+          line(matchImage, cur, ref, Scalar(255));
+          circle(matchImage, ref, (float) refKp[1], Scalar(255));
+          circle(matchImage, cur, (float) curKp[1], Scalar(255));
+        }
+      }
+      imshow("Reference image", referenceImage);
+      imshow("Current image", currentImage);
+      imshow("Match", matchImage);
+    }
+    // Unsubscribe if the module is running.
+    if (running)
+      compassProxy->unsubscribe("VisualCompassTest");
+    return;
+}
+
