@@ -35,6 +35,7 @@
 #include <alproxies/altexttospeechproxy.h>
 #include <alproxies/almemoryproxy.h>
 
+
 using namespace std;
 using namespace AL;
 using namespace cv;
@@ -71,6 +72,7 @@ int main(int argc, char *argv[]) {
     string parameterClientName = "Cam_Test_LandMark";
     int period = 500;
     landMark.subscribe("Test_LandMark",period, 0.0);
+   // alMemory.subscribeToEvent("MiddleTactilTouch");
     const string clientName = camProxy.subscribe("Cam_Test_LandMark", AL::kQVGA, AL::kBGRColorSpace, 30);
     int cont = 0;
     string naoMark;
@@ -87,6 +89,9 @@ int main(int argc, char *argv[]) {
     bool onNear = false;
     bool finish = false;
 
+    //variables boton
+    float sale = 0.0;
+    bool Nxt = false;
 
     naoVision.visualCompass();
     while (key != 27 && !finish){
@@ -99,9 +104,9 @@ int main(int argc, char *argv[]) {
 
         //naoVision.calibrateColorDetection();
         //naoVision.colorFilter(src);
-        //brownArea = naoVision.getAreaBrownColor(src);
-        //whiteArea = naoVision.getAreaWhiteColor(src);
-        redArea = naoVision.getAreaRedColor(src);
+       // brownArea = naoVision.getAreaBrownColor(src);
+        whiteArea = naoVision.getAreaWhiteColor(src);
+       // redArea = naoVision.getAreaRedColor(src);
         //finalArea = naoVision.FinalLineFilterRelayRace(src); //Agregar al proyecto!
 
         if(redArea >= 25){
@@ -109,24 +114,27 @@ int main(int argc, char *argv[]) {
             counterR++;
             if(counterR >= 10){
                 expectedMarkID = "64]";
+                textToSpeech.say("Metal");
                 break;
             }
         }
-        if(whiteArea >= 25){
+        if(whiteArea >= 15){
             cout<<"Plastico " << whiteArea << endl;
             //expectedMarkID = "80]";REAL
-            counterR++;
+            counterW++;
             if(counterW >= 10){
                 expectedMarkID = "119";
+                textToSpeech.say("Plastico");
                 break;
             }
         }
         if(brownArea >= 25){
             cout<<"Carton " << brownArea << endl;
             //expectedMarkID = "108";REAL
-            counterR++;
-            if(counterR >= 10){
+            counterB++;
+            if(counterB >= 10){
                 expectedMarkID = "114";
+                textToSpeech.say("Carton");
                 break;
             }
 
@@ -134,12 +142,33 @@ int main(int argc, char *argv[]) {
         key = waitKey(10);
         for (int i = 0; i < 250000; i++);   // Delay.
     }
-    //Guardar todo esto en una funcion
+
+
+
+    while(!Nxt)
+    {
+
+   // cout<<"Espera boton"<<endl;
+    sale = memory.getData("MiddleTactilTouched");
+        if (sale > 0.5f)
+        {
+            Nxt = true;
+
+     //       cout<<"boton presionado"<<endl;
+        }
+    }
+
+//Posicion para buscar naoMarks
     posture.goToPosture("Crouch",0.5);
-    motion.angleInterpolation("HeadYaw",0.0, 1.0 ,true);
+    motion.angleInterpolation("HeadYaw",0.0, 1.0 ,true);//voltear directamente al frente
     usleep(1000000);
+
+    cout<<"Detectando NaoMark"<<endl;
+
     naoMark = getNaoMark(landMark,camProxy,memory,clientName,parameterClientName);
     cout << naoMark << endl;
+
+
     //Buscar naoMark Derecha
     if(naoMark == expectedMarkID){
         //naoMark = getNaoMark(landMark,camProxy,memory,clientName,parameterClientName);
@@ -179,6 +208,7 @@ int main(int argc, char *argv[]) {
     motion.setStiffnesses("Body",0);
     landMark.unsubscribe("Test_LandMark");
     camProxy.unsubscribe("Cam_Test_LandMark");
+    //alMemory.subscribeToEvent("MiddleTactilTouch");
     //..,,,,,,,,,,,Stop sequence,,,,,,,,,,,,,
 
     //Guardar todo esto en una funcion
@@ -223,12 +253,19 @@ string getNaoMark(AL::ALLandMarkDetectionProxy landMark, AL::ALVideoDeviceProxy 
     src = imgHeader.clone();
     imshow("src", src);
 
+    do{
+      //  cout<<"entra al while2"<<endl;
+        markInfo = memory.getData("LandmarkDetected",0);
+    //    cout<<"markInfo "<<markInfo.getSize()<<endl;
+    }while(markInfo.getSize()<=2);
 
-    markInfo = memory.getData("LandmarkDetected");
-    markID = markInfo[1][0][1].toString().substr(1,3);
-    }while(waitKey(20)!= 'x');
+    // cout<<"Detecta Landmark"<<endl;
+
+        markID = markInfo[1][0][1].toString().substr(1,3);
+    // cout<<"MarkID"<<markID<<endl;
+    }while(markInfo.getSize() <=2);
+    // cout<<"Sale del while"<<endl;
     //Solo es para que compile!!!!!!!!!!
     //Modificar para que regrese si encontro o no la naoMark
     return markID;
 }
-

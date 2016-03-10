@@ -249,11 +249,11 @@ int NaoVision::getAreaWhiteColor(Mat originalImage){
 * LowV  = 0/255
 * HighV = 255/255
 */
-    iLowH = 77;
-    iHighH = 118;
-    iLowS = 2;
-    iHighS = 79;
-    iLowV = 175;
+    iLowH = 70;
+    iHighH = 110;
+    iLowS = 0;
+    iHighS = 70;
+    iLowV = 170;
     iHighV = 255;
 
     colorFilter(originalImage);
